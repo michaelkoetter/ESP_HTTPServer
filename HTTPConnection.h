@@ -6,22 +6,22 @@
 #include <http_parser.h>
 
 #ifdef HTTPSERVER_DEBUG
-#define HTTP_PARSER_DEBUG_CB(CB, ...) \
-    HTTP_DEBUG("[%d] HTTPConnection::" #CB " data=%s \n", reinterpret_cast<HTTPConnection *>(p->data)->id, ##__VA_ARGS__) \
+#define HTTP_PARSER_DEBUG_CB(CB, DATA, ...) \
+    HTTP_DEBUG("[%d] HTTPConnection::" #CB " data=%s \n", reinterpret_cast<HTTPConnection *>(p->data)->id, DATA) \
     return reinterpret_cast<HTTPConnection *>(p->data)->CB(__VA_ARGS__);
 #else
-#define HTTP_PARSER_DEBUG_CB(CB, ...) \
+#define HTTP_PARSER_DEBUG_CB(CB, DATA, ...) \
     return reinterpret_cast<HTTPConnection *>(p->data)->CB(__VA_ARGS__);
 #endif
 
 #define HTTP_PARSER_CB(CB, ...) \
-  static int cb_##CB(http_parser* p) { HTTP_PARSER_DEBUG_CB(CB) } \
+  static int cb_##CB(http_parser* p) { HTTP_PARSER_DEBUG_CB(CB, 0) } \
   int CB();
 
 #define HTTP_PARSER_CB_DATA(CB, ...) \
   static int cb_##CB(http_parser* p, const char *at, size_t length) \
     { char buf[length + 1]; memcpy(buf, at, length); buf[length] = 0x00; \
-      HTTP_PARSER_DEBUG_CB(CB, reinterpret_cast<const char *>(buf)) } \
+      HTTP_PARSER_DEBUG_CB(CB, buf, reinterpret_cast<const char *>(buf)) } \
   int CB(const char * data);
 
 
