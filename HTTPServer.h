@@ -2,7 +2,7 @@
 
 #include <ESP8266WiFi.h>
 
-#define HTTPSERVER_BUFFER 2048
+#define HTTPSERVER_BUFFER 1460
 
 #ifdef HTTPSERVER_DEBUG
 #define HTTP_DEBUG(fmt, ...) Serial.printf(fmt, ##__VA_ARGS__);
