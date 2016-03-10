@@ -1,12 +1,12 @@
 #include "HTTPConnection.h"
 
-HTTPConnection* HTTPConnection::m_first = 0;
+unsigned long HTTPConnection::__id = 0;
 
-HTTPConnection::HTTPConnection(WiFiClient client)
-  : m_client(client), m_received(0), m_next(0)
+HTTPConnection::HTTPConnection()
+  : m_status(New), m_request(0),
+    m_id(__id++)
 {
-  http_parser_init(&m_parser, HTTP_REQUEST);
-  m_parser.data = this; // used by callbacks
+  HTTP_DEBUG("<%d> HTTPConnection::HTTPConnection() \n", m_id)
 
   m_settings.on_message_begin = &cb_onMessageBegin;
   m_settings.on_headers_complete = &cb_onHeadersComplete;
@@ -16,109 +16,124 @@ HTTPConnection::HTTPConnection(WiFiClient client)
   m_settings.on_header_value = &cb_onHeaderValue;
   m_settings.on_body = &cb_onBody;
 
-  HTTPConnection::add(this);
+  init();
+}
+
+void HTTPConnection::init() {
+  HTTP_DEBUG("<%d> HTTPConnection::HTTPConnection init \n", m_id)
+  http_parser_init(&m_parser, HTTP_REQUEST);
+  m_parser.data = this; // used by callbacks
+  m_status = New;
 }
 
 HTTPConnection::~HTTPConnection()
 {
-  HTTPConnection::remove(this);
+  HTTP_DEBUG("<%d> HTTPConnection::~HTTPConnection() \n", m_id)
+  if (m_request) delete m_request;
 }
 
-void HTTPConnection::handle()
+void HTTPConnection::handle(WiFiClient& client, uint8_t* buf, size_t bufSize)
 {
-  if (m_next) {
-    m_next->handle();
-  }
+  m_currentClient = client;
 
-  uint8_t buf[HTTPSERVER_BUFFER];
-  int received = 0;
-  int parsed = 0;
-  do {
-    received = m_client.read(buf, HTTPSERVER_BUFFER);
-    m_received += received;
-    if (m_received > 0) {
-      HTTP_DEBUG("[%d] HTTPConnection::handle Received %d bytes... \n", id, received)
-      parsed = http_parser_execute(&m_parser, &m_settings, reinterpret_cast<const char*>(buf), received);
-      HTTP_DEBUG("[%d] HTTPConnection::handle Parsed %d bytes... \n", id, parsed)
-      if (parsed != received) {
-        HTTP_DEBUG("[%d] HTTPConnection::handle Parsed != Received! \n", id)
-      }
-
-      if (received == 0) {
-        // EOF
-        delete this;
-      }
-    }
-  } while(received > 0);
-}
-
-void HTTPConnection::add(HTTPConnection *self)
-{
-  HTTPConnection* tmp = m_first;
-
-  if (tmp == 0) {
-    self->id = 0;
-  } else {
-    self->id = tmp->id + 1;
-  }
-
-  m_first = self;
-  self->m_next = tmp;
-  HTTP_DEBUG("[%d] HTTPConnection::add \n", self->id)
-}
-
-void HTTPConnection::remove(HTTPConnection *self)
-{
-  HTTP_DEBUG("[%d] HTTPConnection::remove \n", self->id)
-  if (m_first == self) {
-    m_first = self->m_next;
-    self->m_next = 0;
+  if (!client || !client.connected()) {
+    http_parser_execute(&m_parser, &m_settings, reinterpret_cast<const char*>(buf), 0);
+    m_status = Closed;
     return;
   }
 
-  for (HTTPConnection* prev = m_first; prev->m_next; prev = prev->m_next ) {
-    if (prev->m_next == self) {
-      prev->m_next = self->m_next;
-      self->m_next = 0;
-      return;
+  if (m_status == WaitClose || m_status == Closed) {
+    return;
+  }
+
+  if (m_status == New) {
+    m_status = Idle;
+  }
+
+  if (client.available()) {
+    m_status = WaitRead;
+    int received = 0;
+    int parsed = 0;
+    received = client.read(buf, bufSize);
+    HTTP_DEBUG("<%d> HTTPConnection::handle Received %d bytes... \n", m_id, received)
+    parsed = http_parser_execute(&m_parser, &m_settings, reinterpret_cast<const char*>(buf), received);
+    HTTP_DEBUG("<%d> HTTPConnection::handle Parsed %d bytes... \n", m_id, parsed)
+    if (parsed != received) {
+      HTTP_DEBUG("<%d> HTTPConnection::handle Parsed != Received \n", m_id)
+
+      Serial.printf("<%d> HTTP parser error: %s - %s \n", m_id,
+        http_errno_name((http_errno) m_parser.http_errno),
+        http_errno_description((http_errno) m_parser.http_errno));
+
+      // TODO better error handling
+      close();
     }
   }
+
+  m_currentClient = WiFiClient();
+}
+
+void HTTPConnection::close()
+{
+  m_status = WaitClose;
 }
 
 int HTTPConnection::onMessageBegin()
 {
+  HTTP_DEBUG("<%d> HTTPConnection::onMessageBegin free heap=%d \n", m_id, ESP.getFreeHeap())
 
+  if (m_request != 0) {
+    Serial.printf("<%d> Dangling HTTP request, aborting.");
+    return -1; // panic!
+  }
+
+  m_request = new HTTPRequest(this, (http_method) m_parser.method);
+  return 0;
 }
 
 int HTTPConnection::onHeadersComplete()
 {
-
+  return m_request->onHeadersComplete();
 }
 
 int HTTPConnection::onMessageComplete()
 {
-  m_client.write("HTTP/1.1 200 OK\r\n"
-                 "Content-Type: text/ascii\r\n"
-                 "\r\n"
-                 "OK");
+  HTTP_DEBUG("<%d> HTTPConnection::onMessageComplete free heap=%d \n", m_id, ESP.getFreeHeap())
+
+  if (http_should_keep_alive(&m_parser)) {
+    m_currentClient.write( "HTTP/1.1 204 No Content\r\n"
+                    "Content-Length: 0\r\n"
+                    "\r\n");
+  } else {
+    m_currentClient.write( "HTTP/1.1 204 No Content\r\n"
+                    "Content-Length: 0\r\n"
+                    "Connection: close\r\n"
+                    "\r\n");
+    close();
+  }
+
+  m_request->log(Serial);
+  m_status = Idle;
+  delete m_request; m_request = 0;
+  return 0;
 }
 
-int HTTPConnection::onUrl(const char * data)
+int HTTPConnection::onUrl(const char* data, size_t length)
 {
-
+  return m_request->onUrl(data, length);
 }
 
-int HTTPConnection::onHeaderField(const char * data)
+int HTTPConnection::onHeaderField(const char* data, size_t length)
 {
-
+  return m_request->onHeaderField(data, length);
 }
 
-int HTTPConnection::onHeaderValue(const char * data)
+int HTTPConnection::onHeaderValue(const char* data, size_t length)
 {
-
+  return m_request->onHeaderValue(data, length);
 }
 
-int HTTPConnection::onBody(const char * data)
+int HTTPConnection::onBody(const char * data, size_t length)
 {
-
+  return 0;
 }

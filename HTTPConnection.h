@@ -1,13 +1,14 @@
 #pragma once
-
+#include "config.h"
 #include <ESP8266WiFi.h>
-#include "HTTPServer.h"
+#include "HTTPRequest.h"
 
-#include <http_parser.h>
+#include "http_parser.h"
 
 #ifdef HTTPSERVER_DEBUG
 #define HTTP_PARSER_DEBUG_CB(CB, DATA, ...) \
-    HTTP_DEBUG("[%d] HTTPConnection::" #CB " data=%s \n", reinterpret_cast<HTTPConnection *>(p->data)->id, DATA) \
+    HTTP_DEBUG("<%d> HTTPConnection::" #CB " data=%d \n", \
+      reinterpret_cast<HTTPConnection *>(p->data)->id(), DATA) \
     return reinterpret_cast<HTTPConnection *>(p->data)->CB(__VA_ARGS__);
 #else
 #define HTTP_PARSER_DEBUG_CB(CB, DATA, ...) \
@@ -15,24 +16,31 @@
 #endif
 
 #define HTTP_PARSER_CB(CB, ...) \
-  static int cb_##CB(http_parser* p) { HTTP_PARSER_DEBUG_CB(CB, 0) } \
+  static int cb_##CB(http_parser* p) { HTTP_PARSER_DEBUG_CB(CB, -1) } \
   int CB();
 
 #define HTTP_PARSER_CB_DATA(CB, ...) \
   static int cb_##CB(http_parser* p, const char *at, size_t length) \
-    { char buf[length + 1]; memcpy(buf, at, length); buf[length] = 0x00; \
-      HTTP_PARSER_DEBUG_CB(CB, buf, reinterpret_cast<const char *>(buf)) } \
-  int CB(const char * data);
+    { HTTP_PARSER_DEBUG_CB(CB, length, at, length) } \
+  int CB(const char * data, size_t length);
 
+
+typedef enum { New = 0, WaitRead = 1, Idle = 3, WaitClose = 98, Closed = 99} HTTPConnectionStatus;
 
 class HTTPConnection
 {
 public:
-    HTTPConnection(WiFiClient client);
+    HTTPConnection();
     ~HTTPConnection();
 
-    void              handle();
-    static HTTPConnection*  first() { return m_first; }
+    void              handle(WiFiClient& client, uint8_t* buf, size_t bufSize);
+    void              init();
+    void              close();
+
+    unsigned long     id() { return m_id; }
+    HTTPConnectionStatus  status() { return m_status; }
+    bool              idle() { return m_status == Idle || m_status == WaitClose; }
+
 
 private:
     // http_parser callback functions
@@ -44,15 +52,13 @@ private:
     HTTP_PARSER_CB_DATA(onHeaderValue)
     HTTP_PARSER_CB_DATA(onBody)
 
-    static void       add(HTTPConnection *self);
-    static void       remove(HTTPConnection *self);
-
-    WiFiClient        m_client;
-    http_parser       m_parser;
+    http_parser           m_parser;
     http_parser_settings  m_settings;
-    size_t            m_received;
 
-    static HTTPConnection*    m_first;
-    HTTPConnection*           m_next;
-    int                   id;
+    WiFiClient            m_currentClient;
+    HTTPConnectionStatus  m_status;
+    HTTPRequest*          m_request;
+    unsigned long         m_id;
+
+    static unsigned long __id;
 };

@@ -46,6 +46,9 @@ typedef unsigned __int64 uint64_t;
 #include <stdint.h>
 #endif
 
+// ESP_HTTPServer config
+#include "config.h"
+
 /* Compile with -DHTTP_PARSER_STRICT=0 to make less checks, but run
  * faster
  */
