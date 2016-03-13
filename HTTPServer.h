@@ -1,8 +1,9 @@
 #ifndef _HTTP_SERVER_H
 #define _HTTP_SERVER_H
 
+#include <WiFiServer.h>
+
 #include "config.h"
-#include <ESP8266WiFi.h>
 #include "HTTPConnection.h"
 
 struct ConnectionEntry

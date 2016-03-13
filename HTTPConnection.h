@@ -1,8 +1,9 @@
 #ifndef _HTTP_CONNECTION_H
 #define _HTTP_CONNECTION_H
 
+#include <WiFiClient.h>
+
 #include "config.h"
-#include <ESP8266WiFi.h>
 #include "HTTPRequest.h"
 
 #include "http_parser.h"
