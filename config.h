@@ -1,4 +1,5 @@
-#pragma once
+#ifndef _HTTPSERVER_CONFIG_H
+#define _HTTPSERVER_CONFIG_H
 
 // Maximium header size allowed. See http_parser.h for details
 // 2k should be sufficient.
@@ -48,3 +49,5 @@
 #else
 #define HTTP_DEBUG(fmt, ...) ;
 #endif
+
+#endif //_HTTPSERVER_CONFIG_H

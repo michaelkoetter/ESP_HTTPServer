@@ -1,6 +1,8 @@
-#pragma once
-#include "config.h"
+#ifndef _HTTP_REQUEST_H
+#define _HTTP_REQUEST_H
+
 #include <Arduino.h>
+#include "config.h"
 #include "http_parser.h"
 
 class HTTPConnection;
@@ -84,3 +86,5 @@ private:
 
   static unsigned long __id;
 };
+
+#endif //_HTTP_REQUEST_H

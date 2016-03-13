@@ -1,4 +1,6 @@
-#pragma once
+#ifndef _HTTP_CONNECTION_H
+#define _HTTP_CONNECTION_H
+
 #include "config.h"
 #include <ESP8266WiFi.h>
 #include "HTTPRequest.h"
@@ -62,3 +64,5 @@ private:
 
     static unsigned long __id;
 };
+
+#endif //_HTTP_CONNECTION_H

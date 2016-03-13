@@ -1,4 +1,6 @@
-#pragma once
+#ifndef _HTTP_SERVER_H
+#define _HTTP_SERVER_H
+
 #include "config.h"
 #include <ESP8266WiFi.h>
 #include "HTTPConnection.h"
@@ -27,3 +29,5 @@ private:
 
   bool              m_canHandle, m_canAccept;
 };
+
+#endif //_HTTP_SERVER_H
