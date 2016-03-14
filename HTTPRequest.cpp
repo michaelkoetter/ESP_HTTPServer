@@ -4,12 +4,12 @@
 unsigned long HTTPRequest::__id = 0;
 
 
-HTTPRequest::HTTPRequest(HTTPConnection* connection, http_method method)
-  : m_connection(connection), m_method(method), m_headerLength(0),
-    m_headerValue(true), m_currentHeader(-1), m_age(millis()), m_id(__id++)
+HTTPRequest::HTTPRequest()
+  : m_method((http_method) -1),
+    m_currentHeader(-1), m_headerLength(0), m_headerValue(true),
+    m_age(millis()), m_id(__id++)
 {
-  HTTP_DEBUG("<%d> <%d> HTTPRequest::HTTPRequest method=%s \n",
-    m_connection ? m_connection->id() : 0, m_id, http_method_str(m_method))
+  HTTP_DEBUG("   <%lu> HTTPRequest::HTTPRequest\n", m_id)
 
   // we store some headers by defult
   storeHeader("Host");
@@ -17,15 +17,13 @@ HTTPRequest::HTTPRequest(HTTPConnection* connection, http_method method)
   storeHeader("Content-Length");
 
   // CORS support
-  storeHeader("Origin");
   storeHeader("Access-Control-Request-Method");
   storeHeader("Access-Control-Request-Headers");
 }
 
 HTTPRequest::~HTTPRequest()
 {
-  HTTP_DEBUG("<%d> <%d> HTTPRequest::~HTTPRequest \n",
-    m_connection ? m_connection->id() : 0, m_id)
+  HTTP_DEBUG("   <%lu> HTTPRequest::~HTTPRequest \n", m_id)
 }
 
 void HTTPRequest::storeHeader(const char * name, bool store) {
@@ -47,8 +45,9 @@ int HTTPRequest::findHeader(const char * startsWith, size_t length)
   return -1;
 }
 
-int HTTPRequest::onUrl(const char * data, size_t length)
+int HTTPRequest::onUrl(http_method method, const char * data, size_t length)
 {
+  m_method = method;
   return m_url.onData(data, length);
 }
 
@@ -72,11 +71,11 @@ int HTTPRequest::onHeaderValue(const char * data, size_t length)
 
 int HTTPRequest::onHeadersComplete()
 {
-  HTTP_DEBUG("<%d> <%d> HTTPRequest::onHeadersComplete \n", m_connection->id(), m_id);
+  HTTP_DEBUG("   <%lu> HTTPRequest::onHeadersComplete \n", m_id);
   #ifdef HTTPSERVER_DEBUG
   int i = 0;
   while (i < HTTPSERVER_MAX_HEADER_LINES && m_header[i].field) {
-    HTTP_DEBUG("<%d> <%d>    %s: %s \n", m_connection->id(), m_id,
+    HTTP_DEBUG("   <%lu>    %s: %s \n", m_id,
     m_header[i].field.c_str(), m_header[i].value.c_str());
     i++;
   }
@@ -87,6 +86,7 @@ int HTTPRequest::onHeadersComplete()
 
 void HTTPRequest::log(Print& p)
 {
-  p.printf("<%d> <%d> %d %s %s %dms \n", m_connection->id(), m_id,
-    millis(), http_method_str(m_method), m_url.c_str(), millis() - m_age);
+  unsigned long ticks = millis();
+  p.printf("@%lu %s %s %-lums \n", ticks, http_method_str(m_method),
+    m_url.c_str(), ticks - m_age);
 }

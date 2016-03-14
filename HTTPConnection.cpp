@@ -1,4 +1,6 @@
 #include "HTTPConnection.h"
+#include "HTTPResponse.h"
+#include "RequestHandlers.h"
 
 unsigned long HTTPConnection::__id = 0;
 
@@ -6,7 +8,7 @@ HTTPConnection::HTTPConnection()
   : m_status(New), m_request(0),
     m_id(__id++)
 {
-  HTTP_DEBUG("<%d> HTTPConnection::HTTPConnection() \n", m_id)
+  HTTP_DEBUG("<%lu> HTTPConnection::HTTPConnection() \n", m_id)
 
   m_settings.on_message_begin = &cb_onMessageBegin;
   m_settings.on_headers_complete = &cb_onHeadersComplete;
@@ -20,7 +22,7 @@ HTTPConnection::HTTPConnection()
 }
 
 void HTTPConnection::init() {
-  HTTP_DEBUG("<%d> HTTPConnection::HTTPConnection init \n", m_id)
+  HTTP_DEBUG("<%lu> HTTPConnection::HTTPConnection init \n", m_id)
   http_parser_init(&m_parser, HTTP_REQUEST);
   m_parser.data = this; // used by callbacks
   m_status = New;
@@ -28,7 +30,7 @@ void HTTPConnection::init() {
 
 HTTPConnection::~HTTPConnection()
 {
-  HTTP_DEBUG("<%d> HTTPConnection::~HTTPConnection() \n", m_id)
+  HTTP_DEBUG("<%lu> HTTPConnection::~HTTPConnection() \n", m_id)
   if (m_request) delete m_request;
 }
 
@@ -55,13 +57,13 @@ void HTTPConnection::handle(WiFiClient& client, uint8_t* buf, size_t bufSize)
     int received = 0;
     int parsed = 0;
     received = client.read(buf, bufSize);
-    HTTP_DEBUG("<%d> HTTPConnection::handle Received %d bytes... \n", m_id, received)
+    HTTP_DEBUG("<%lu> HTTPConnection::handle Received %d bytes... \n", m_id, received)
     parsed = http_parser_execute(&m_parser, &m_settings, reinterpret_cast<const char*>(buf), received);
-    HTTP_DEBUG("<%d> HTTPConnection::handle Parsed %d bytes... \n", m_id, parsed)
+    HTTP_DEBUG("<%lu> HTTPConnection::handle Parsed %d bytes... \n", m_id, parsed)
     if (parsed != received) {
-      HTTP_DEBUG("<%d> HTTPConnection::handle Parsed != Received \n", m_id)
+      HTTP_DEBUG("<%lu> HTTPConnection::handle Parsed != Received \n", m_id)
 
-      Serial.printf("<%d> HTTP parser error: %s - %s \n", m_id,
+      Serial.printf("<%lu> HTTP parser error: %s - %s \n", m_id,
         http_errno_name((http_errno) m_parser.http_errno),
         http_errno_description((http_errno) m_parser.http_errno));
 
@@ -80,14 +82,14 @@ void HTTPConnection::close()
 
 int HTTPConnection::onMessageBegin()
 {
-  HTTP_DEBUG("<%d> HTTPConnection::onMessageBegin free heap=%d \n", m_id, ESP.getFreeHeap())
+  HTTP_DEBUG("<%lu> HTTPConnection::onMessageBegin free heap=%d \n", m_id, ESP.getFreeHeap())
 
   if (m_request != 0) {
-    Serial.printf("<%d> Dangling HTTP request, aborting.");
+    Serial.printf("<%lu> Dangling HTTP request, aborting.", m_id);
     return -1; // panic!
   }
 
-  m_request = new HTTPRequest(this, (http_method) m_parser.method);
+  m_request = new HTTPRequest();
   return 0;
 }
 
@@ -98,29 +100,32 @@ int HTTPConnection::onHeadersComplete()
 
 int HTTPConnection::onMessageComplete()
 {
-  HTTP_DEBUG("<%d> HTTPConnection::onMessageComplete free heap=%d \n", m_id, ESP.getFreeHeap())
+  HTTP_DEBUG("<%lu> HTTPConnection::onMessageComplete free heap=%d \n", m_id, ESP.getFreeHeap())
 
-  if (http_should_keep_alive(&m_parser)) {
-    m_currentClient.write( "HTTP/1.1 204 No Content\r\n"
-                    "Content-Length: 0\r\n"
-                    "\r\n");
-  } else {
-    m_currentClient.write( "HTTP/1.1 204 No Content\r\n"
-                    "Content-Length: 0\r\n"
-                    "Connection: close\r\n"
-                    "\r\n");
-    close();
-  }
+  HTTPResponse response(m_currentClient, m_parser.http_major, m_parser.http_minor);
+  NotFoundRequestHandler notFound;
+  notFound.handle(m_request, &response);
 
   m_request->log(Serial);
   m_status = Idle;
+  
+  if (response.contentLength() < 0) {
+    HTTP_DEBUG("<%lu> HTTPConnection::conMessageComplete RequestHandler didn't set Content-Length, "
+      "need to close connection. \n", m_id);
+    close();
+  }
+
+  if (!http_should_keep_alive(&m_parser)) {
+    close();
+  }
+
   delete m_request; m_request = 0;
   return 0;
 }
 
 int HTTPConnection::onUrl(const char* data, size_t length)
 {
-  return m_request->onUrl(data, length);
+  return m_request->onUrl((http_method) m_parser.method, data, length);
 }
 
 int HTTPConnection::onHeaderField(const char* data, size_t length)

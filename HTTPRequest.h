@@ -60,11 +60,14 @@ friend HTTPConnection;
 public:
   void            storeHeader(const char * name, bool store = true);
 
+  const char *    url() { return m_url.c_str(); }
+  http_method     method() { return m_method; }
+
 private:
-  HTTPRequest(HTTPConnection* connection, http_method method = (http_method)1337);
+  HTTPRequest();
   ~HTTPRequest();
 
-  int             onUrl(const char * data, size_t length);
+  int             onUrl(http_method method, const char * data, size_t length);
   int             onHeaderField(const char * data, size_t length);
   int             onHeaderValue(const char * data, size_t length);
   int             onHeadersComplete();
