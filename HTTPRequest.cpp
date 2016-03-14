@@ -6,7 +6,7 @@ unsigned long HTTPRequest::__id = 0;
 
 HTTPRequest::HTTPRequest()
   : m_method((http_method) -1),
-    m_path(0),
+    m_path(0), m_query(0),
     m_currentHeader(-1), m_headerLength(0), m_headerValue(true),
     m_age(millis()), m_id(__id++)
 {
@@ -100,7 +100,7 @@ int HTTPRequest::onHeadersComplete()
   #ifdef HTTPSERVER_DEBUG
   HTTP_DEBUG("   <%lu>    <path>: %s \n", m_id, m_path)
   HTTP_DEBUG("   <%lu>    <query>: %s \n", m_id, m_query)
-  
+
   int i = 0;
   while (i < HTTPSERVER_MAX_HEADER_LINES && m_header[i].field) {
     HTTP_DEBUG("   <%lu>    %s: %s \n", m_id,

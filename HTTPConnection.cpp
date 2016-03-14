@@ -5,7 +5,7 @@
 unsigned long HTTPConnection::__id = 0;
 
 HTTPConnection::HTTPConnection()
-  : m_status(New), m_request(0),
+  : m_request(0), m_status(Closed),
     m_id(__id++)
 {
   HTTP_DEBUG("<%lu> HTTPConnection::HTTPConnection() \n", m_id)
@@ -22,10 +22,10 @@ HTTPConnection::HTTPConnection()
 }
 
 void HTTPConnection::init() {
-  HTTP_DEBUG("<%lu> HTTPConnection::HTTPConnection init \n", m_id)
+  HTTP_DEBUG("<%lu> HTTPConnection::init status=Closed \n", m_id)
   http_parser_init(&m_parser, HTTP_REQUEST);
   m_parser.data = this; // used by callbacks
-  m_status = New;
+  m_status = Closed;
 }
 
 HTTPConnection::~HTTPConnection()
@@ -39,20 +39,31 @@ void HTTPConnection::handle(WiFiClient& client, uint8_t* buf, size_t bufSize)
   m_currentClient = client;
 
   if (!client || !client.connected()) {
-    http_parser_execute(&m_parser, &m_settings, reinterpret_cast<const char*>(buf), 0);
-    m_status = Closed;
+    if (m_status != Closed) {
+      HTTP_DEBUG("<%lu> HTTPConnection::handle status=Closed \n", m_id)
+      http_parser_execute(&m_parser, &m_settings, reinterpret_cast<const char*>(buf), 0);
+      m_status = Closed;
+    }
     return;
   }
 
-  if (m_status == WaitClose || m_status == Closed) {
+  // else: we have a valid & connected client
+
+  if (m_status == WaitClose) {
+    // we are waiting for the connection to close
+    client.stop();
+    client = WiFiClient();
     return;
   }
 
-  if (m_status == New) {
+  if (m_status == Closed) {
+    // this is a new connection
+    HTTP_DEBUG("<%lu> HTTPConnection::handle status=Idle \n", m_id)
     m_status = Idle;
   }
 
   if (client.available()) {
+    HTTP_DEBUG("<%lu> HTTPConnection::handle status=WaitRead \n", m_id)
     m_status = WaitRead;
     int received = 0;
     int parsed = 0;
@@ -67,7 +78,8 @@ void HTTPConnection::handle(WiFiClient& client, uint8_t* buf, size_t bufSize)
         http_errno_name((http_errno) m_parser.http_errno),
         http_errno_description((http_errno) m_parser.http_errno));
 
-      // TODO better error handling
+      // FIXME implement better error handling
+      // for now we just close the connection...
       close();
     }
   }
@@ -75,8 +87,8 @@ void HTTPConnection::handle(WiFiClient& client, uint8_t* buf, size_t bufSize)
   m_currentClient = WiFiClient();
 }
 
-void HTTPConnection::close()
-{
+void HTTPConnection::close() {
+  HTTP_DEBUG("<%lu> HTTPConnection::close status=WaitClose \n", m_id)
   m_status = WaitClose;
 }
 
@@ -107,19 +119,25 @@ int HTTPConnection::onMessageComplete()
   notFound.handle(m_request, &response);
 
   m_request->log(Serial);
-  m_status = Idle;
 
-  // FIXME the following is not correct - insted af closing, we should send
-  // "Connection: close" and wait...
+  bool needToClose = false;
 
   if (response.contentLength() < 0) {
     HTTP_DEBUG("<%lu> HTTPConnection::conMessageComplete RequestHandler didn't set Content-Length, "
       "need to close connection. \n", m_id);
-    close();
+    needToClose = true;
   }
 
   if (!http_should_keep_alive(&m_parser)) {
+    HTTP_DEBUG("<%lu> HTTPConnection::onMessageComplete need to close connection \n", m_id)
+    needToClose = true;
+  }
+
+  if (needToClose) {
     close();
+  } else {
+    HTTP_DEBUG("<%lu> HTTPConnection::onMessageComplete status=Idle \n", m_id)
+    m_status = Idle;
   }
 
   delete m_request; m_request = 0;

@@ -2,7 +2,7 @@
 
 HTTPServer::HTTPServer(int port, bool tcpNoDelay)
   : m_server(port), m_tcpNoDelay(tcpNoDelay), m_connections(0),
-    m_canAccept(true), m_canHandle(true)
+    m_canHandle(true), m_canAccept(true)
 {
 }
 
@@ -81,20 +81,10 @@ void HTTPServer::handle()
   // handle connections
   for (int slot = 0; slot < HTTPSERVER_MAX_CONNECTIONS; slot++) {
     ConnectionEntry& conn = m_connections[slot];
-    if (conn.client) {
-      if (conn.client.connected() && conn.httpConnection.status() == WaitClose) {
-        HTTP_DEBUG("<%d> HTTPServer::handle Closing connection \n", slot);
-        conn.client.stop();
-      } else if (!conn.client.connected() || conn.httpConnection.status() == Closed) {
-        HTTP_DEBUG("<%d> HTTPServer::handle Connection closed \n", slot);
-        conn.client = WiFiClient();
-      } else {
-        if (m_canHandle) {
-          conn.httpConnection.handle(conn.client, m_buffer, HTTPSERVER_BUFFER);
-        } else {
-          // not much we can do, except wait for memory to become available again...
-        }
-      }
+    if (m_canHandle) {
+      conn.httpConnection.handle(conn.client, m_buffer, HTTPSERVER_BUFFER);
+    } else {
+      // not much we can do, except wait for memory to become available again...
     }
   }
 

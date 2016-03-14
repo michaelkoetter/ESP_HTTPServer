@@ -28,7 +28,7 @@
   int CB(const char * data, size_t length);
 
 
-typedef enum { New = 0, WaitRead = 1, Idle = 3, WaitClose = 98, Closed = 99} HTTPConnectionStatus;
+typedef enum { WaitRead = 1, Idle = 3, WaitClose = 98, Closed = 99} HTTPConnectionStatus;
 
 class HTTPConnection
 {
@@ -38,12 +38,11 @@ public:
 
     void              handle(WiFiClient& client, uint8_t* buf, size_t bufSize);
     void              init();
-    void              close();
 
-    unsigned long     id() { return m_id; }
+    unsigned long         id() { return m_id; }
     HTTPConnectionStatus  status() { return m_status; }
-    bool              idle() { return m_status == Idle || m_status == WaitClose; }
-
+    bool                  idle() { return m_status == Idle || m_status == WaitClose; }
+    void                  close();
 
 private:
     // http_parser callback functions
@@ -59,8 +58,10 @@ private:
     http_parser_settings  m_settings;
 
     WiFiClient            m_currentClient;
-    HTTPConnectionStatus  m_status;
     HTTPRequest*          m_request;
+
+    HTTPConnectionStatus  m_status;
+
     unsigned long         m_id;
 
     static unsigned long __id;
