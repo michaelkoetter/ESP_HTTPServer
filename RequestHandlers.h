@@ -8,7 +8,7 @@ public:
   virtual bool        handle(HTTPRequest* request, HTTPResponse* response)
   {
     response->setStatus(404);
-    response->printf("Not found: %s", request->url());
+    response->printf("Not found: %s", request->path());
     return true;
   }
 };

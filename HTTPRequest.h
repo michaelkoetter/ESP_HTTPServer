@@ -31,15 +31,21 @@ public:
     clear(); onData(str, strlen(str));
   }
 
-  void clear() {
-    _size = 0;
-    if (_value) _value[0] = 0x00;
+  const char *  buf() { return _value; }
+  const char *  buf(size_t offset) { return offset < _size ? _value + offset : 0; }
+
+  void clear() { truncate(0); }
+
+  void truncate(size_t at) {
+    if (at < _size) {
+      _size = at;
+      if (_value) _value[at] = 0x00;
+    }
   }
 
+  size_t  size() { return _size; }
   operator bool() const { return _size > 0; }
 
-  const char* c_str() { return _value; }
-  size_t size() { return _size; }
 private:
   char* _value;
   size_t _size;
@@ -60,7 +66,7 @@ friend HTTPConnection;
 public:
   void            storeHeader(const char * name, bool store = true);
 
-  const char *    url() { return m_url.c_str(); }
+  const char *    path() { return m_path; }
   http_method     method() { return m_method; }
 
 private:
@@ -79,8 +85,15 @@ private:
   http_method     m_method;
 
   HTTPRequestValue  m_url;
+  http_parser_url   m_urlP;
+
+  // pointer into m_url.buf()
+  const char *      m_path;
+  const char *      m_query;
+
   HTTPRequestValue  m_headerField;
   HTTPHeader      m_header[HTTPSERVER_MAX_HEADER_LINES];
+
   int             m_currentHeader;
   int             m_headerLength;
   bool            m_headerValue;

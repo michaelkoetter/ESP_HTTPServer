@@ -108,7 +108,10 @@ int HTTPConnection::onMessageComplete()
 
   m_request->log(Serial);
   m_status = Idle;
-  
+
+  // FIXME the following is not correct - insted af closing, we should send
+  // "Connection: close" and wait...
+
   if (response.contentLength() < 0) {
     HTTP_DEBUG("<%lu> HTTPConnection::conMessageComplete RequestHandler didn't set Content-Length, "
       "need to close connection. \n", m_id);
