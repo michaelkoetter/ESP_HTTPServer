@@ -25,7 +25,10 @@ void HTTPResponse::ensureHeadersSent()
     // TODO send actual headers...
 
     if (m_contentLength < 0) {
+      // HTTPConnection will close the connection
       m_client.write("Connection: close\r\n");
+    } else {
+      m_client.printf("Content-Length: %lu\r\n", m_contentLength);
     }
     m_client.write("\r\n");
     m_headersSent = true;

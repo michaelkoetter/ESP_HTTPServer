@@ -5,11 +5,9 @@
 class NotFoundRequestHandler : public HTTPRequestHandler
 {
 public:
-  virtual bool        handle(HTTPRequest* request, HTTPResponse* response)
+  virtual void handle(HTTPRequest* request, HTTPResponse* response)
   {
-    response->setStatus(404);
-    response->printf("Not found: %s", request->path());
-    return true;
+    sendResponse(response, 404, "Not found");
   }
 };
 
